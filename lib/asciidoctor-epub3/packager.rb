@@ -190,21 +190,38 @@ body > svg {
     nil
   end
 
-  def add_images_from_front_matter
-    (::File.read 'front-matter.html').scan ImgSrcScanRx do
-      resources do
-        file $1
-      end
-    end if ::File.file? 'front-matter.html'
+  def get_frontmatter_files doc
+    if doc.attr? 'fm-files'
+      doc.attributes['fm-files']
+    elsif File.exist? 'front-matter.html'
+      ['front-matter.html']
+    else
+      []
+    end
+  end
+  def add_images_from_front_matter doc
+    get_frontmatter_files(doc).each do |fmf|
+      (::File.read fmf).scan ImgSrcScanRx do
+        resources do
+          file $1
+        end
+      end if ::File.file? fmf
+    end
     nil
   end
 
   def add_front_matter_page doc, spine_builder
-    if ::File.file? 'front-matter.html'
-      front_matter_content = ::File.read 'front-matter.html'
-      spine_builder.file 'front-matter.xhtml' => (postprocess_xhtml front_matter_content, @format)
-      unless (spine_builder.property? 'svg') || SvgImgSniffRx !~ front_matter_content
-        spine_builder.add_property 'svg'
+    get_frontmatter_files(doc).each do |fmf|
+      puts "font matter #{fmf}"
+      if ::File.exist? fmf
+        fn = File.basename(fmf)
+        front_matter_content = ::File.read fmf
+        spine_builder.file fn => (postprocess_xhtml front_matter_content, @format)
+        unless (spine_builder.property? 'svg') || SvgImgSniffRx !~ front_matter_content
+          spine_builder.add_property 'svg'
+        end
+      else
+        warn %(Looking for frontmatter: file #{fmf} is configured but doesn't exist!)
       end
     end
     nil
@@ -270,7 +287,7 @@ body > svg {
     workdir = (doc.attr 'docdir').nil_or_empty? ? '.' : workdir
     resources workdir: workdir do
       extend GepubResourceBuilderMixin
-      builder.add_images_from_front_matter
+      builder.add_images_from_front_matter doc
       builder.add_nav_doc doc, self, spine, format
       builder.add_ncx_doc doc, self, spine
       ordered do
