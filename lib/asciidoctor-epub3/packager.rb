@@ -212,7 +212,6 @@ body > svg {
 
   def add_front_matter_page doc, spine_builder
     get_frontmatter_files(doc).each do |fmf|
-      puts "font matter #{fmf}"
       if ::File.exist? fmf
         fn = File.basename(fmf)
         front_matter_content = ::File.read fmf
@@ -221,7 +220,7 @@ body > svg {
           spine_builder.add_property 'svg'
         end
       else
-        warn %(Looking for frontmatter: file #{fmf} is configured but doesn't exist!)
+        warn %(Looking for front matter: file #{fmf} is configured but doesn't exist!)
       end
     end
     nil
