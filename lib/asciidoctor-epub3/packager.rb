@@ -94,7 +94,19 @@ module GepubBuilderMixin
 </platform>
 </display_options>'.to_ios unless format == :kf8
 
-        with_media_type 'application/x-font-ttf' do
+        # https://github.com/asciidoctor/asciidoctor-epub3/issues/120
+        #
+        # 'application/x-font-ttf' causes warnings in epubcheck 4.0.2,
+        # "non-standard font type". Discussion:
+        # https://www.mobileread.com/forums/showthread.php?t=231272
+        #
+        # 3.1 spec recommends 'application/font-sfnt', but epubcheck doesn't
+        # implement that yet (warnings). https://idpf.github.io/epub-cmt/v3/
+        #
+        # 3.0 spec recommends 'application/vnd.ms-opentype', this works without
+        # warnings.
+        # http://www.idpf.org/epub/30/spec/epub30-publications.html#sec-core-media-types
+        with_media_type 'application/vnd.ms-opentype' do
           font_files.each do |font_file|
             file font_file => ::File.join(DATA_DIR, font_file)
           end
@@ -123,7 +135,7 @@ module GepubBuilderMixin
           width, height = 1050, 1600
         end
       else
-        warn %(asciidoctor: ERROR: front cover image not found or readable: #{image_path})
+        warn %(asciidoctor: ERROR: #{::File.basename(doc.attr 'docfile')}: front cover image not found or readable: #{::File.expand_path image_path, workdir})
         image_path = nil
       end
     end
@@ -242,7 +254,7 @@ body > svg {
         elsif ::File.readable? image_path
           file image_path
         else
-          warn %(asciidoctor: ERROR: image not found or not readable: #{image_path})
+          warn %(asciidoctor: ERROR: #{::File.basename(image.document.attr 'docfile')}: image not found or not readable: #{::File.expand_path image_path, workdir})
         end
       end
     end
@@ -423,7 +435,12 @@ body > svg {
   def select_fonts filename, scripts = 'latin'
     font_css = ::File.read(filename)
     font_css = font_css.gsub(/(?<=-)latin(?=\.ttf\))/, scripts) unless scripts == 'latin'
-    font_list = font_css.scan(/url\(\.\.\/(.+\.ttf)\);$/).flatten
+
+    # match CSS font urls in the forms of:
+    # src: url(../fonts/notoserif-regular-latin.ttf);
+    # src: url(../fonts/notoserif-regular-latin.ttf) format("truetype");
+    font_list = font_css.scan(/url\(\.\.\/([^)]+\.ttf)\)/).flatten
+
     return [font_list, font_css.to_ios]
   end
 

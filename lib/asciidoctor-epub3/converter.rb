@@ -1,4 +1,4 @@
-# encoding: UTF-8
+# encoding: utf-8
 require_relative 'spine_item_processor'
 require_relative 'font_icon_map'
 
@@ -58,8 +58,6 @@ class ContentConverter
 
   XmlElementRx = /<\/?.+?>/
   CharEntityRx = /&#(\d{2,6});/
-  NamedEntityRx = /&([A-Z]+);/
-  UppercaseTagRx = /<(\/)?([A-Z]+)>/
 
   FromHtmlSpecialCharsMap = {
     '&lt;' => '<',
@@ -102,20 +100,15 @@ class ContentConverter
 
     if (doctitle = node.doctitle partition: true, sanitize: true, use_fallback: true).subtitle?
       title = doctitle.main
-      title_upper = title.upcase
       subtitle = doctitle.subtitle
     else
       # HACK until we get proper handling of title-only in CSS
-      title = title_upper = ''
+      title = ''
       subtitle = doctitle.combined
     end
 
     doctitle_sanitized = doctitle.combined
     subtitle_formatted = subtitle.split.map {|w| %(<b>#{w}</b>) } * ' '
-    # FIXME use uppercase pcdata helper to make less fragile (see logic in Asciidoctor PDF)
-    subtitle_formatted_upper = subtitle_formatted.upcase
-        .gsub(UppercaseTagRx) { %(<#{$1}#{$2.downcase}>) }
-        .gsub(NamedEntityRx) { %(&#{$1.downcase};) }
 
     if (node.attr 'publication-type', 'book') == 'book'
       byline = nil
@@ -171,7 +164,7 @@ document.addEventListener('DOMContentLoaded', function(event, reader) {
 <section class="chapter" title="#{doctitle_sanitized.gsub '"', '&quot;'}" epub:type="chapter" id="#{docid}">
 #{icon_css_scoped}<header>
 <div class="chapter-header">
-#{byline}<h1 class="chapter-title">#{title_upper}#{subtitle ? %[ <small class="subtitle">#{subtitle_formatted_upper}</small>] : nil}</h1>
+#{byline}<h1 class="chapter-title">#{title}#{subtitle ? %[ <small class="subtitle">#{subtitle_formatted}</small>] : nil}</h1>
 </div>
 </header>
 #{content})]
@@ -344,6 +337,9 @@ document.addEventListener('DOMContentLoaded', function(event, reader) {
   end
 
   def quote node
+    id_attr = %( id="#{node.id}") if node.id
+    class_attr = (role = node.role) ? %( class="blockquote #{role}") : ' class="blockquote"'
+
     footer_content = []
     if (attribution = node.attr 'attribution')
       footer_content << attribution
@@ -363,7 +359,7 @@ document.addEventListener('DOMContentLoaded', function(event, reader) {
     content = (convert_content node).strip.
       sub(OpenParagraphTagRx, '<p><span class="open-quote">“</span>').
       sub(CloseParagraphTagRx, '<span class="close-quote">”</span></p>')
-    %(<div class="blockquote">
+    %(<div#{id_attr}#{class_attr}>
 <blockquote>
 #{content}#{footer_tag}
 </blockquote>
@@ -371,6 +367,9 @@ document.addEventListener('DOMContentLoaded', function(event, reader) {
   end
 
   def verse node
+    id_attr = %( id="#{node.id}") if node.id
+    class_attr = (role = node.role) ? %( class="verse #{role}") : ' class="verse"'
+
     footer_content = []
     if (attribution = node.attr 'attribution')
       footer_content << attribution
@@ -383,7 +382,7 @@ document.addEventListener('DOMContentLoaded', function(event, reader) {
 
     footer_tag = footer_content.size > 0 ? %(
 <span class="attribution">~ #{footer_content * ', '}</span>) : nil
-    %(<div class="verse">
+    %(<div#{id_attr}#{class_attr}>
 <pre>#{node.content}#{footer_tag}</pre>
 </div>)
   end
@@ -395,9 +394,7 @@ document.addEventListener('DOMContentLoaded', function(event, reader) {
       title = node.title
       title_sanitized = xml_sanitize title
       title_attr = %( title="#{title_sanitized}")
-      # FIXME use uppercase pcdata helper to make less fragile (see logic in Asciidoctor PDF)
-      title_upper = title.upcase.gsub(NamedEntityRx) { %(&#{$1.downcase};) }
-      title_el = %(<h2>#{title_upper}</h2>
+      title_el = %(<h2>#{title}</h2>
 )
     else
       title_attr = nil
@@ -418,14 +415,16 @@ document.addEventListener('DOMContentLoaded', function(event, reader) {
     frame_class = {
       'all' => 'table-framed',
       'topbot' => 'table-framed-topbot',
-      'sides' => 'table-framed-sides'
+      'sides' => 'table-framed-sides',
+      'none' => ''
     }
     grid_class = {
       'all' => 'table-grid',
       'rows' => 'table-grid-rows',
-      'cols' => 'table-grid-cols'
+      'cols' => 'table-grid-cols',
+      'none' => ''
     }
-    table_classes = %W(table #{frame_class[(node.attr 'frame')] || frame_class['topbot']} #{grid_class[(node.attr 'grid')] || grid_class['rows']})
+    table_classes = %W(table #{frame_class[node.attr 'frame'] || frame_class['topbot']} #{grid_class[node.attr 'grid'] || grid_class['rows']})
     if (role = node.role)
       table_classes << role
     end
@@ -692,8 +691,8 @@ document.addEventListener('DOMContentLoaded', function(event, reader) {
         id_attr = nil unless @xrefs_seen.add? refid
         refdoc = doc.references[:spine_items].find {|it| refdoc_id == (it.id || (it.attr 'docname')) }
         if refdoc
-          if (reftext = refdoc.references[:ids][refdoc_refid])
-            text ||= reftext
+          if (xreftext = refdoc.references[:ids][refdoc_refid])
+            text ||= xreftext
           else
             warn %(asciidoctor: WARNING: #{::File.basename(doc.attr 'docfile')}: invalid reference to unknown anchor in #{refdoc_id} chapter: #{refdoc_refid})
           end
@@ -702,10 +701,18 @@ document.addEventListener('DOMContentLoaded', function(event, reader) {
         end
       else
         id_attr = (@xrefs_seen.add? refid) ? %( id="xref-#{refid}") : nil
-        if (reftext = doc.references[:ids][refid])
-          text ||= reftext
+        if (refs = doc.references[:refs])
+          if ::Asciidoctor::AbstractNode === (ref = refs[refid])
+            xreftext = text || ref.xreftext((@xrefstyle ||= (doc.attr 'xrefstyle')))
+          end
         else
-          # FIXME we get false negatives for reference to bibref
+          xreftext = doc.references[:ids][refid]
+        end
+
+        if xreftext
+          text ||= xreftext
+        else
+          # FIXME we get false negatives for reference to bibref when using Asciidoctor < 1.5.6
           warn %(asciidoctor: WARNING: #{::File.basename(doc.attr 'docfile')}: invalid reference to unknown local anchor (or valid bibref): #{refid})
         end
       end
