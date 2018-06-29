@@ -370,7 +370,8 @@ module Epub3
     wheelchair: '\f193',
     vimeo_square: '\f194',
     try: '\f195',
-    plus_square_o: '\f196'
+    plus_square_o: '\f196',
+    newspaper_o: '\f1ea'
   }
 end
 end
