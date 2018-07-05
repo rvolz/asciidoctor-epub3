@@ -390,6 +390,10 @@ Using the inline image macro is preferred as it allows the height and width to b
 |Populates the source reference (`<dc:source>`) in the package metadata.
 The recommended practice is to identify the referenced resource by means of a string or number conforming to a formal identification system.
 
+|series-name, series-volume, series-id
+|Populates the series statements (`belongs-to-collection`) in the package metadata.
+Volume is a number, ID probably a UUID that is constant for all volumes in the series.
+
 |epub-properties
 |An optional override of the properties attribute for this document's item in the manifest.
 _Only applies to a chapter document._

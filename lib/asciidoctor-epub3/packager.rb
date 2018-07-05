@@ -560,6 +560,23 @@ class Packager
             publisher producer_name
           end
         end
+
+        # For books add additional info, such as series etc
+        #
+        # The GEPUB collection spec is not recognized by Calibre et al, only for ebook readers? So we add
+        # the meta properties.
+        # If there is a series attribute add meta attributes for it. If there is also a volume number
+        # add it, else assume it's volume 1. A series id is also added if available.
+        if doc.attr? 'series-name'
+          series_name = doc.attr 'series-name'
+          series_volume = doc.attr?('series-volume') ? doc.attr('series-volume') : 1
+          series_id = doc.attr?('series-id') ? doc.attr('series-id') : 0
+          collection series_name, series_volume
+          @book.metadata.add_oldstyle_meta(series_name, {property: 'belongs-to-collection', id: 'pub-collection'})
+          @book.metadata.add_oldstyle_meta('series', {property: 'collection-type', refines: '#pub-collection'})
+          @book.metadata.add_oldstyle_meta(series_volume, {property: 'group-position', refines: '#pub-collection'})
+          @book.metadata.add_oldstyle_meta(series_id, {property: 'dcterms:identifier', refines: '#pub-collection'}) unless series_id == 0
+        end
       else
         # FIXME this logic needs some work
         if doc.attr? 'publisher'
